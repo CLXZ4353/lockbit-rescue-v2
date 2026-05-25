@@ -1,5 +1,7 @@
 # lockbit-rescue v2 — LockBit 3.0 Recovery Toolkit
 
+[![lockbit](https://img.shields.io/badge/topic-lockbit-blue)](https://github.com/topics/lockbit) [![ransomware-recovery](https://img.shields.io/badge/topic-ransomware--recovery-green)](https://github.com/topics/ransomware-recovery) [![python](https://img.shields.io/badge/language-python-yellow)](https://github.com/topics/python) [![c](https://img.shields.io/badge/language-c-orange)](https://github.com/topics/c)
+
 **Complete rewrite of [Saddytech/lockbit-rescue](https://github.com/Saddytech/lockbit-rescue) with all limitations resolved.**
 
 Recover files encrypted by **LockBit 3.0 ("Black") / CriptomanGizmo** ransomware without paying the ransom, by exploiting the documented **keystream-reuse weakness**.
