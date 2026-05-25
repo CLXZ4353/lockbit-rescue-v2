@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Compiled binaries (rebuild via install.sh)
+stream-reuse
+brute-extend
+direct-decrypt
+frank
+_stream-reuse/stream-reuse
+_stream-reuse/direct_decrypt_v2
+_stream-reuse/brute_extend_v2
+_stream-reuse/frank
+
+# Static libraries (vendored, rebuildable)
+*.a
+
+# Embedded git repos
+_stream-reuse/.git/
+
+# Recovery artifacts
+.stream-reuse/
+*.log
+manifest.csv
+verification_report.json
+.recovery_state.json
+.scratch/
+decrypted/
+decrypted
+
+# Test data (generated at runtime)
+lockbit-rescue-v2/test_data/synthetic_lockbit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
