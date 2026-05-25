@@ -28,7 +28,7 @@ Recover files encrypted by **LockBit 3.0 ("Black") / CriptomanGizmo** ransomware
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 bash install.sh
@@ -47,7 +47,7 @@ python3 verify_recovered_v2.py /path/to/output --json
 
 ```powershell
 # 1. Clone and install (requires MinGW-w64 or MSVC)
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 powershell -ExecutionPolicy Bypass -File install.ps1
@@ -218,7 +218,7 @@ output_dir/
 ```bash
 # Debian / Ubuntu
 sudo apt install build-essential git python3 python3-pip file
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 bash install.sh
@@ -242,7 +242,7 @@ bash install.sh
 choco install git python mingw make -y
 
 # Clone and build
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 powershell -ExecutionPolicy Bypass -File install.ps1
@@ -256,7 +256,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 pacman -S mingw-w64-x86_64-gcc make git python
 
 # 3. Clone and build (from PowerShell or CMD)
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 powershell -ExecutionPolicy Bypass -File install.ps1
@@ -267,7 +267,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 ```powershell
 # 1. Install "Desktop development with C++" from Visual Studio Installer
 # 2. Clone and build (from Developer PowerShell for VS)
-git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+git clone https://github.com/CLXZ4353/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
 pip install -r requirements.txt
 powershell -ExecutionPolicy Bypass -File install.ps1
