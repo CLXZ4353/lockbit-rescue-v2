@@ -16,21 +16,28 @@
  *                   [ks_extend_hex] [--threads N]
  *
  * Compile with OpenMP for parallelization:
- *   gcc -O2 -fopenmp -o brute_extend_v2 brute_extend_v2.c aplib.a -m32 \
- *       -fno-stack-protector -D_FILE_OFFSET_BITS=64
+ *   Linux:  gcc -O2 -fopenmp -o brute_extend_v2 brute_extend_v2.c aplib.a \
+ *           -fno-stack-protector -D_FILE_OFFSET_BITS=64
+ *   Windows: gcc -O2 -fopenmp -o brute_extend_v2.exe brute_extend_v2.c aplib.a
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <fcntl.h>
 #include <time.h>
 #include <errno.h>
 #include "aplib.h"
-#include <iconv.h>
+
+/* Cross-platform: conditional includes for POSIX vs Windows */
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <sys/types.h>
+    #include <fcntl.h>
+    #include <iconv.h>
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -115,19 +122,41 @@ static inline void salsa20_block(const uint32_t state[16], uint8_t out[64]) {
 
 /* ============================================================================
  * Filename compression — UTF-8 to UTF-16LE then apLib compress
+ * Cross-platform: uses MultiByteToWideChar on Windows, iconv on POSIX
  * ============================================================================ */
 
-static int compress_filename_utf16le(const char *long_name, uint8_t *output, int output_max) {
+static int utf8_to_utf16le(const char *utf8_str, uint8_t *out_buf, size_t out_max) {
+#ifdef _WIN32
+    /* Windows: use MultiByteToWideChar for UTF-8 → UTF-16LE */
+    int wchars = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, NULL, 0);
+    if (wchars <= 0) return -1;
+
+    wchar_t *wide = (wchar_t *)calloc(wchars + 1, sizeof(wchar_t));
+    if (!wide) return -1;
+
+    int result = MultiByteToWideChar(CP_UTF8, 0, utf8_str, -1, wide, wchars);
+    if (result <= 0) { free(wide); return -1; }
+
+    /* Convert wchar_t array to raw UTF-16LE bytes */
+    size_t byte_len = (size_t)(wchars * sizeof(wchar_t));
+    if (byte_len > out_max) { free(wide); return -1; }
+    memcpy(out_buf, wide, byte_len);
+
+    free(wide);
+    return (int)byte_len;
+#else
+    /* POSIX: use iconv for UTF-8 → UTF-16LE */
     iconv_t cd = iconv_open("UTF-16LE", "UTF-8");
     if (cd == (iconv_t)-1) return -1;
 
-    size_t sourceLen = strlen(long_name);
+    size_t sourceLen = strlen(utf8_str);
     size_t bufferSize = sourceLen * 2 + 4;
+    if (bufferSize > out_max) { iconv_close(cd); return -1; }
 
-    char *utf16Buffer = (char *)calloc(bufferSize + 1, sizeof(char));
+    char *utf16Buffer = (char *)calloc(bufferSize, sizeof(char));
     if (!utf16Buffer) { iconv_close(cd); return -1; }
 
-    char *inbuf = (char *)long_name;
+    char *inbuf = (char *)utf8_str;
     char *outbuf = utf16Buffer;
     size_t inbytesleft = sourceLen;
     size_t outbytesleft = bufferSize;
@@ -139,13 +168,28 @@ static int compress_filename_utf16le(const char *long_name, uint8_t *output, int
     }
     iconv_close(cd);
 
-    int finalLen = (int)(bufferSize - outbytesleft);
-    finalLen += 2;  /* null terminator pair */
+    size_t byte_len = bufferSize - outbytesleft;
+    memcpy(out_buf, utf16Buffer, byte_len);
+    free(utf16Buffer);
+    return (int)byte_len;
+#endif
+}
+
+static int compress_filename_utf16le(const char *long_name, uint8_t *output, int output_max) {
+    size_t max_conv = (size_t)output_max + 32; /* generous buffer for conversion */
+    uint8_t *utf16Buffer = (uint8_t *)calloc(max_conv, 1);
+    if (!utf16Buffer) return -1;
+
+    int conv_len = utf8_to_utf16le(long_name, utf16Buffer, max_conv);
+    if (conv_len < 0) { free(utf16Buffer); return -1; }
+
+    /* Add null terminator pair for UTF-16LE string */
+    int finalLen = conv_len + 2;
 
     void *workmem = malloc(aP_workmem_size(0));
     if (!workmem) { free(utf16Buffer); return -1; }
 
-    unsigned int sz = aP_pack((unsigned char *)utf16Buffer, output, finalLen, workmem, NULL, NULL);
+    unsigned int sz = aP_pack(utf16Buffer, output, finalLen, workmem, NULL, NULL);
     free(workmem);
     free(utf16Buffer);
     return (int)sz;

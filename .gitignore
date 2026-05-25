@@ -6,15 +6,26 @@ __pycache__/
 dist/
 build/
 
-# Compiled binaries (rebuild via install.sh)
+# Compiled binaries (rebuild via install.sh / install.ps1)
 stream-reuse
+stream-reuse.exe
 brute-extend
+brute-extend.exe
 direct-decrypt
+direct-decrypt.exe
 frank
 _stream-reuse/stream-reuse
+_stream-reuse/stream-reuse.exe
 _stream-reuse/direct_decrypt_v2
+_stream-reuse/direct_decrypt_v2.exe
 _stream-reuse/brute_extend_v2
+_stream-reuse/brute_extend_v2.exe
 _stream-reuse/frank
+
+# Windows build artifacts
+*.exe
+*.dll
+*.pdb
 
 # Static libraries (vendored, rebuildable)
 *.a

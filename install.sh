@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
-# lockbit-rescue-v2 installer
-# ============================
+# lockbit-rescue-v2 installer (Linux)
+# ====================================
 # Builds all required binaries and installs Python dependencies.
 #
 # Usage:   bash install.sh
 # Tested:  Linux x86_64; works on Debian/Ubuntu/Arch/CachyOS/Fedora.
+# Windows: Use install.ps1 instead (requires MinGW-w64 or MSVC)
 
 set -euo pipefail
 
@@ -73,6 +74,20 @@ if ! python3 -c "import tqdm" >/dev/null 2>&1; then
     }
 fi
 
+# python-magic (cross-platform file type detection)
+if ! python3 -c "import magic" >/dev/null 2>&1; then
+    echo "[*] Installing python-magic..."
+    # On Debian/Ubuntu, libmagic-dev is needed for the C extension
+    if command -v dpkg >/dev/null 2>&1 && ! dpkg -l libmagic-dev 2>/dev/null | grep -q "^ii"; then
+        echo "[!] Note: For best performance, install libmagic-dev:"
+        echo "    sudo apt install libmagic-dev"
+    fi
+    pip install --user python-magic || pip3 install --user python-magic || {
+        echo "[!] Could not install python-magic. Falling back to subprocess-based detection."
+        echo "    For better results, run: pip install --user python-magic"
+    }
+fi
+
 # ============================================================================
 # Clone upstream decryptor
 # ============================================================================
@@ -86,6 +101,56 @@ if [ ! -d "${UPSTREAM_DIR}/.git" ]; then
 else
     echo "    Updating existing clone..."
     git -C "${UPSTREAM_DIR}" pull --ff-only 2>/dev/null || true
+fi
+
+# ============================================================================
+# Rebuild aplib.a for native architecture (64-bit) if needed
+# ============================================================================
+
+echo ""
+echo "[*] Checking aplib library architecture..."
+
+APLIB_A="${UPSTREAM_DIR}/aplib.a"
+if [ -f "${APLIB_A}" ]; then
+    # Check if existing aplib.a is compatible with native arch
+    ARCH_INFO=$(file -b "${APLIB_A}" 2>/dev/null || echo "unknown")
+    if echo "${ARCH_INFO}" | grep -qi "x86[_ ]64\|AMD64"; then
+        echo "[+] aplib.a is already x86_64 — OK"
+    elif echo "${ARCH_INFO}" | grep -qi "i386\|32-bit"; then
+        echo "[!] aplib.a is 32-bit — rebuilding for native architecture..."
+
+        # Download aplib source from ibsensoftware.com
+        APLIB_SRC_DIR="${UPSTREAM_DIR}/aplib-src"
+        if [ ! -d "${APLIB_SRC_DIR}" ]; then
+            echo "    Downloading aPLib source..."
+            TMPZIP=$(mktemp /tmp/aplib-XXXXXX.zip)
+            if curl -fsSL "http://www.ibsensoftware.com/files/aPLib-1.1.1.zip" -o "${TMPZIP}" 2>/dev/null || \
+               wget -q "http://www.ibsensoftware.com/files/aPLib-1.1.1.zip" -O "${TMPZIP}" 2>/dev/null; then
+                unzip -qo "${TMPZIP}" -d "${APLIB_SRC_DIR}" 2>/dev/null || true
+            fi
+            rm -f "${TMPZIP}"
+        fi
+
+        # Compile aplib for native architecture
+        if [ -f "${APLIB_SRC_DIR}/aplib.c" ] && [ -f "${APLIB_SRC_DIR}/apdefl.c" ]; then
+            echo "    Compiling aPLib for x86_64..."
+            gcc -O2 -c -o "${UPSTREAM_DIR}/aplib.o" \
+                "${APLIB_SRC_DIR}/aplib.c" 2>/dev/null && \
+            ar rcs "${APLIB_A}" "${UPSTREAM_DIR}/aplib.o" && \
+            rm -f "${UPSTREAM_DIR}/aplib.o" && \
+            echo "[+] aplib.a rebuilt for x86_64 successfully" || {
+                echo "[!] Failed to rebuild aplib.a — 32-bit binaries may not work on this system"
+            }
+        else
+            echo "[!] aPLib source not found at ${APLIB_SRC_DIR}"
+            echo "    Please download from: http://www.ibsensoftware.com/files/aPLib-1.1.1.zip"
+            echo "    Extract to: ${APLIB_SRC_DIR}/ (aplib.c, apdefl.c)"
+        fi
+    else
+        echo "[?] aplib.a architecture: ${ARCH_INFO}"
+    fi
+else
+    echo "[!] aplib.a not found — binaries requiring it will fail"
 fi
 
 # ============================================================================
@@ -115,14 +180,14 @@ if [ -f "${HERE}/src/brute_extend_v2.c" ]; then
         -o "${UPSTREAM_DIR}/brute_extend_v2" \
         "${UPSTREAM_DIR}/brute_extend_v2.c" \
         "${UPSTREAM_DIR}/aplib.a" \
-        -m32 -fno-stack-protector \
+        -fno-stack-protector \
         -D_FILE_OFFSET_BITS=64 \
         -liconv 2>/dev/null || \
     gcc -O2 ${OPENMP_FLAG} \
         -o "${UPSTREAM_DIR}/brute_extend_v2" \
         "${UPSTREAM_DIR}/brute_extend_v2.c" \
         "${UPSTREAM_DIR}/aplib.a" \
-        -m32 -fno-stack-protector \
+        -fno-stack-protector \
         -D_FILE_OFFSET_BITS=64
 
     if [ -f "${UPSTREAM_DIR}/brute_extend_v2" ]; then
@@ -149,7 +214,7 @@ if [ -f "${HERE}/src/direct_decrypt_v2.c" ]; then
         gcc -O0 \
             -o "${UPSTREAM_DIR}/direct_decrypt_v2" \
             "${UPSTREAM_DIR}/direct_decrypt_v2.c" \
-            -m32 -z execstack -fno-stack-protector -no-pie \
+            -z execstack -fno-stack-protector -no-pie \
             -Wl,-z,norelro -static \
             -D_FILE_OFFSET_BITS=64 \
             -DHAVE_FRANK_H 2>/dev/null || {
@@ -157,14 +222,14 @@ if [ -f "${HERE}/src/direct_decrypt_v2.c" ]; then
                 gcc -O0 \
                     -o "${UPSTREAM_DIR}/direct_decrypt_v2" \
                     "${UPSTREAM_DIR}/direct_decrypt_v2.c" \
-                    -m32 -z execstack -fno-stack-protector \
+                    -z execstack -fno-stack-protector \
                     -D_FILE_OFFSET_BITS=64 \
                     -DHAVE_FRANK_H 2>/dev/null || {
                         # Final fallback: pure-C Salsa20 (no shellcode)
                         gcc -O2 \
                             -o "${UPSTREAM_DIR}/direct_decrypt_v2" \
                             "${UPSTREAM_DIR}/direct_decrypt_v2.c" \
-                            -m32 -fno-stack-protector \
+                            -fno-stack-protector \
                             -D_FILE_OFFSET_BITS=64
                     }
             }
@@ -173,7 +238,7 @@ if [ -f "${HERE}/src/direct_decrypt_v2.c" ]; then
         gcc -O2 \
             -o "${UPSTREAM_DIR}/direct_decrypt_v2" \
             "${UPSTREAM_DIR}/direct_decrypt_v2.c" \
-            -m32 -fno-stack-protector \
+            -fno-stack-protector \
             -D_FILE_OFFSET_BITS=64
     fi
 

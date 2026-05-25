@@ -23,10 +23,9 @@ USAGE:
     python3 lockbit_rescue_v2.py <SOURCE_DIR> <OUTPUT_DIR> [OPTIONS]
 
 REQUIREMENTS:
-    - Linux x86_64
-    - gcc, make, git (for install.sh)
-    - Python 3.8+ with tqdm
-    - The `file` command (libmagic)
+    - Linux x86_64 or Windows x86_64
+    - gcc/MinGW-w64, make (for install.sh/install.ps1)
+    - Python 3.8+ with tqdm and python-magic
 
 AUTHOR: Improved version of Saddytech/lockbit-rescue
 LICENSE: Same as original (MIT-style for defensive security research)
@@ -40,6 +39,7 @@ import json
 import logging
 import multiprocessing
 import os
+import platform
 import shutil
 import struct
 import subprocess
@@ -49,6 +49,13 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
+
+# Cross-platform: python-magic for file type detection (works on Linux + Windows)
+try:
+    import magic as libmagic_module
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
 
 try:
     from tqdm import tqdm
@@ -594,21 +601,38 @@ def build_batches(groups: Dict[str, List[EncryptedFile]],
 # ============================================================================
 
 def find_tool(name: str, script_dir: Path) -> Optional[Path]:
-    """Search for a required binary tool."""
-    candidates = [
-        script_dir / name,
-        script_dir / "_stream-reuse" / name,
-        Path("/usr/local/bin") / name,
-    ]
-    # Also check PATH
-    for p in os.environ.get("PATH", "").split(":"):
-        candidate = Path(p) / name
-        if candidate.exists() and os.access(candidate, os.X_OK):
-            return candidate
+    """Search for a required binary tool (cross-platform).
+
+    On Windows also checks for name.exe variants. Uses os.pathsep for PATH splitting.
+    """
+    # Determine executable suffixes to try
+    if sys.platform == "win32":
+        suffixes = [name + ".exe", name]
+    else:
+        suffixes = [name]
+
+    candidates: List[Path] = []
+    for s in suffixes:
+        candidates.append(script_dir / s)
+        candidates.append(script_dir / "_stream-reuse" / s)
+    # Linux-only system path
+    if sys.platform != "win32":
+        candidates.append(Path("/usr/local/bin") / name)
+
+    # Check PATH environment variable (cross-platform separator)
+    pathsep = os.pathsep  # ";" on Windows, ":" on Unix
+    for p in os.environ.get("PATH", "").split(pathsep):
+        for s in suffixes:
+            candidate = Path(p) / s
+            if candidate.exists():
+                # On Windows check .exe; on Unix check executable bit
+                if sys.platform == "win32" or os.access(candidate, os.X_OK):
+                    return candidate
 
     for c in candidates:
-        if c.exists() and os.access(c, os.X_OK):
-            return c
+        if c.exists():
+            if sys.platform == "win32" or os.access(c, os.X_OK):
+                return c
     return None
 
 
@@ -635,33 +659,79 @@ def copy_with_progress(src: Path, dst: Path, label: str = "", position: int = 2)
 
 
 def libmagic_check(path: Path) -> str:
-    """Run libmagic (file command) on a file and return the type string."""
-    try:
-        result = subprocess.run(
-            ["file", "-b", "--mime-type", str(path)],
-            capture_output=True, text=True, timeout=10,
-        )
-        return result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        # Fallback to basic file command
+    """Detect file MIME type using python-magic (cross-platform).
+
+    Falls back to subprocess `file` command on Linux if python-magic unavailable,
+    then to pure Python magic byte matching as last resort.
+    """
+    # Method 1: python-magic library (works on both Linux and Windows)
+    if HAS_MAGIC:
+        try:
+            return libmagic_module.from_file(str(path), mime=True)
+        except Exception:
+            pass
+
+    # Method 2: subprocess `file` command (Linux/macOS only)
+    if sys.platform != "win32":
         try:
             result = subprocess.run(
-                ["file", "-b", str(path)],
+                ["file", "-b", "--mime-type", str(path)],
                 capture_output=True, text=True, timeout=10,
             )
-            return result.stdout.strip()
-        except Exception:
-            return "unknown"
+            mt = result.stdout.strip()
+            if mt:
+                return mt
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    # Method 3: Pure Python magic byte fallback
+    try:
+        with open(path, "rb") as f:
+            header = f.read(16)
+    except OSError:
+        return "unknown"
+
+    h = header.hex()
+    if h.startswith("ffd8ff"):
+        return "image/jpeg"
+    if h.startswith("89504e470d0a1a0a"):
+        return "image/png"
+    if h.startswith("25504446"):
+        return "application/pdf"
+    if h.startswith("504b0304"):
+        return "application/zip"  # covers docx, xlsx, pptx, etc.
+    if h.startswith("d0cf11e0a1b11ae1"):
+        return "application/msword"  # OLE Compound Document
+    if h.startswith("47494638"):
+        return "image/gif"
+    if h.startswith("424d"):
+        return "image/bmp"
+    if h.startswith("1f8b08"):
+        return "application/gzip"
+    if h.startswith("526172211a07"):
+        return "application/x-rar-compressed"
+    if h.startswith("377abcaf271c"):
+        return "application/x-7z-compressed"
+    if h.startswith("fd377a585a00"):
+        return "application/x-xz"
+    if len(header) >= 4 and header[4:8] == b"ftyp":
+        return "video/mp4"
+    if h.startswith("1a45dfa3"):
+        return "video/x-matroska"
+    if h.startswith("494433") or h.startswith("fffb"):
+        return "audio/mpeg"
+
+    return "application/octet-stream"
 
 
 def is_bad_decrypt(file_type: str) -> bool:
     """Check if libmagic indicates a failed decryption."""
     bad_indicators = [
         "data", "empty", "corrupted", "application/octet-stream",
-        "unknown", ""
+        "unknown"
     ]
     ft_lower = file_type.lower()
-    return any(ind in ft_lower for ind in bad_indicators)
+    return any(ind in ft_lower for ind in bad_indicators) or file_type == ""
 
 
 def decrypt_target(stream_reuse: Path, target_path: Path, oracle_path: Path,
@@ -890,7 +960,8 @@ def run_recovery(args):
     script_dir = Path(__file__).resolve().parent
     stream_reuse = find_tool(args.stream_reuse or "stream-reuse", script_dir)
     if not stream_reuse:
-        print("ERROR: stream-reuse binary not found. Run install.sh first.")
+        installer = "install.ps1" if sys.platform == "win32" else "install.sh"
+        print(f"ERROR: stream-reuse binary not found. Run {installer} first.")
         sys.exit(3)
     logger.info(f"Using stream-reuse: {stream_reuse}")
 

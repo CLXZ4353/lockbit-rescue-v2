@@ -31,6 +31,13 @@ except ImportError:
     print("ERROR: tqdm not installed. Run: pip install tqdm")
     sys.exit(1)
 
+# Cross-platform: python-magic for file type detection (works on Linux + Windows)
+try:
+    import magic as libmagic_module
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
+
 
 # ============================================================================
 # MAGIC BYTE DATABASE for direct validation
@@ -119,22 +126,46 @@ def verify_single_file(filepath: str) -> FileVerification:
             status="EMPTY", details="File is zero bytes",
         )
 
-    # Run libmagic
-    try:
-        result = subprocess.run(
-            ["file", "-b", "--mime-type", str(path)],
-            capture_output=True, text=True, timeout=10,
-        )
-        mime_type = result.stdout.strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    # Run libmagic (cross-platform: python-magic first, then subprocess fallback)
+    mime_type = "unknown"
+
+    if HAS_MAGIC:
+        try:
+            mime_type = libmagic_module.from_file(str(path), mime=True)
+        except Exception:
+            pass
+
+    if mime_type == "unknown" and sys.platform != "win32":
+        # Fallback to `file` command on Unix-like systems
         try:
             result = subprocess.run(
-                ["file", "-b", str(path)],
+                ["file", "-b", "--mime-type", str(path)],
                 capture_output=True, text=True, timeout=10,
             )
-            mime_type = result.stdout.strip()
-        except Exception:
-            mime_type = "unknown"
+            mt = result.stdout.strip()
+            if mt:
+                mime_type = mt
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    # Pure Python magic byte fallback as last resort
+    if mime_type == "unknown":
+        try:
+            with open(path, "rb") as f:
+                header = f.read(16)
+            h = header.hex()
+            if h.startswith("ffd8ff"):
+                mime_type = "image/jpeg"
+            elif h.startswith("89504e470d0a1a0a"):
+                mime_type = "image/png"
+            elif h.startswith("25504446"):
+                mime_type = "application/pdf"
+            elif h.startswith("504b0304"):
+                mime_type = "application/zip"
+            elif h.startswith("d0cf11e0a1b11ae1"):
+                mime_type = "application/msword"
+        except OSError:
+            pass
 
     # Direct magic byte validation
     magic_valid = False

@@ -1,1 +1,4 @@
 tqdm>=4.65.0
+# Cross-platform file type detection (python-magic-bin for Windows, python-magic for Linux)
+python-magic>=0.4.27; sys_platform != "win32"
+python-magic-bin>=0.4.14; sys_platform == "win32"

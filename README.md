@@ -24,10 +24,13 @@ Recover files encrypted by **LockBit 3.0 ("Black") / CriptomanGizmo** ransomware
 
 ## Quick Start
 
+### Linux
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
 cd lockbit-rescue-v2
+pip install -r requirements.txt
 bash install.sh
 
 # 2. Run recovery (Phase 1 — direct decryption)
@@ -38,6 +41,25 @@ python3 lockbit_rescue_v2.py /path/to/encrypted /path/to/output --phase2 --worke
 
 # 4. Verify results
 python3 verify_recovered_v2.py /path/to/output --json
+```
+
+### Windows
+
+```powershell
+# 1. Clone and install (requires MinGW-w64 or MSVC)
+git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+cd lockbit-rescue-v2
+pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File install.ps1
+
+# 2. Run recovery
+python lockbit_rescue_v2.py C:\path\to\encrypted C:\path\to\output
+
+# 3. With Phase 2
+python lockbit_rescue_v2.py C:\path\to\encrypted C:\path\to\output --phase2 --workers 8
+
+# 4. Verify results
+python verify_recovered_v2.py C:\path\to\output --json
 ```
 
 ---
@@ -173,16 +195,32 @@ output_dir/
 
 ## Requirements
 
+### Linux (primary platform)
+
 - **OS:** Linux x86_64
 - **Build tools:** gcc, make, git
-- **Python:** 3.8+ with `tqdm` (`pip install tqdm`)
+- **Python:** 3.8+ with `tqdm` and `python-magic` (`pip install -r requirements.txt`)
 - **System:** `file` command (libmagic) — pre-installed on most distros
 
-### Installation by Distribution
+### Windows (supported via MinGW-w64)
+
+- **OS:** Windows 10/11 x86_64
+- **Build tools:** [MinGW-w64](https://www.msys2.org/) (gcc) or MSVC (cl.exe), git
+- **Python:** 3.8+ with `tqdm` and `python-magic-bin` (`pip install -r requirements.txt`)
+- **PowerShell:** 5.1+ (included with Windows 10/11)
+
+---
+
+## Installation
+
+### Linux
 
 ```bash
 # Debian / Ubuntu
 sudo apt install build-essential git python3 python3-pip file
+git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+cd lockbit-rescue-v2
+pip install -r requirements.txt
 bash install.sh
 
 # Arch / CachyOS
@@ -194,6 +232,48 @@ sudo dnf groupinstall 'Development Tools'
 sudo dnf install git python3 file
 bash install.sh
 ```
+
+### Windows
+
+#### Option A: Chocolatey (recommended)
+
+```powershell
+# Install dependencies via Chocolatey
+choco install git python mingw make -y
+
+# Clone and build
+git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+cd lockbit-rescue-v2
+pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+#### Option B: MSYS2 (MinGW-w64)
+
+```powershell
+# 1. Install MSYS2 from https://www.msys2.org/
+# 2. In MSYS2 MinGW64 terminal:
+pacman -S mingw-w64-x86_64-gcc make git python
+
+# 3. Clone and build (from PowerShell or CMD)
+git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+cd lockbit-rescue-v2
+pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+#### Option C: MSVC (Visual Studio Build Tools)
+
+```powershell
+# 1. Install "Desktop development with C++" from Visual Studio Installer
+# 2. Clone and build (from Developer PowerShell for VS)
+git clone https://github.com/YOUR_USER/lockbit-rescue-v2.git
+cd lockbit-rescue-v2
+pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+> **Note:** On Windows, `stream-reuse` requires MinGW-w64 (GCC) because it links against `aplib.a`. MSVC users will get `brute-extend.exe` and `direct-decrypt.exe` but not `stream-reuse.exe` — Phase 1 direct decryption via stream-reuse won't be available. Use MinGW-w64 for full functionality.
 
 ---
 

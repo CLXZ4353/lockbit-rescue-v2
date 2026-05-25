@@ -35,10 +35,16 @@ RSA_dn          dn = { 0 };                         // rsa private key
 unsigned char   filename[MAX_FILENAME_SIZE * 2] = { 0 };       // to track decompressed filename -- not used in decryption
 
 
-typedef uint32_t (__attribute__((stdcall)) *FUNC_CHECKSUM_tasklet)(void *, uint32_t, uint32_t);
-typedef void     (__attribute__((stdcall)) *FUNC_RSA_decrypt)(void *, void *, void *);
-typedef void     (__attribute__((stdcall)) *FUNC_SALSA20_decrypt)(uint32_t, void *, void *);
-typedef void     (__attribute__((stdcall)) *FUNC_APLib_decompress)(void *, void *);
+#ifndef _WIN32
+#define STDCALL_ATTR
+#else
+#define STDCALL_ATTR __attribute__((stdcall))
+#endif
+
+typedef uint32_t (STDCALL_ATTR *FUNC_CHECKSUM_tasklet)(void *, uint32_t, uint32_t);
+typedef void     (STDCALL_ATTR *FUNC_RSA_decrypt)(void *, void *, void *);
+typedef void     (STDCALL_ATTR *FUNC_SALSA20_decrypt)(uint32_t, void *, void *);
+typedef void     (STDCALL_ATTR *FUNC_APLib_decompress)(void *, void *);
 
 FUNC_CHECKSUM_tasklet   CHECKSUM_tasklet_func = NULL;
 FUNC_RSA_decrypt        RSA_decrypt_func      = NULL;
